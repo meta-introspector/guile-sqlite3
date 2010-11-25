@@ -404,7 +404,7 @@
            (check-error (stmt->db stmt))
            (error "shouldn't get here")))))))
 
-(define (sqlite-fold stmt kons knil)
+(define (sqlite-fold kons knil stmt)
   (assert-live-stmt! stmt)
   (let lp ((seed knil))
     (let ((row (sqlite-step stmt)))
@@ -413,4 +413,4 @@
           seed))))
 
 (define (sqlite-map proc stmt)
-  (reverse! (sqlite-fold stmt cons '())))
+  (reverse! (sqlite-fold cons '() stmt)))
