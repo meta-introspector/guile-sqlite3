@@ -29,7 +29,10 @@
   #:use-module (rnrs bytevectors)
   #:use-module (srfi srfi-9)
   #:export (sqlite-open
-            sqlite-close))
+            sqlite-close
+            sqlite-prepare
+            sqlite-reset
+            sqlite-finalize))
 
 ;;
 ;; Utils
@@ -72,10 +75,10 @@
 (define libsqlite3 (dynamic-link "libsqlite3"))
 
 (define-record-type <sqlite-db>
-  (make-sqlite-db pointer open?)
-  sqlite-db?
-  (pointer sqlite-db-pointer)
-  (open? sqlite-db-open? set-sqlite-db-open?!))
+  (make-db pointer open?)
+  db?
+  (pointer db-pointer)
+  (open? db-open? set-db-open?!))
 
 (define sqlite-errmsg
   (let ((f (pointer->procedure
@@ -83,7 +86,7 @@
             (dynamic-func "sqlite3_errmsg" libsqlite3)
             (list '*))))
     (lambda (db)
-      (utf8-pointer->string (f (sqlite-db-pointer db))))))
+      (utf8-pointer->string (f (db-pointer db))))))
 
 (define sqlite-errcode
   (let ((f (pointer->procedure
@@ -91,7 +94,7 @@
             (dynamic-func "sqlite3_extended_errcode" libsqlite3)
             (list '*))))
     (lambda (db)
-      (f (sqlite-db-pointer db)))))
+      (f (db-pointer db)))))
 
 (define* (sqlite-error db who #:optional code
                        (errmsg (and db (sqlite-errmsg db))))
@@ -108,18 +111,18 @@
             (dynamic-func "sqlite3_close" libsqlite3)
             (list '*))))
     (lambda (db)
-      (if (sqlite-db-open? db)
+      (if (db-open? db)
           (begin
-            (let ((p (sqlite-db-pointer db)))
-              (set-sqlite-db-open?! db #f)
+            (let ((p (db-pointer db)))
+              (set-db-open?! db #f)
               (f p)))))))
 
 (define db-guardian (make-guardian))
 (define (pump-db-guardian)
-  (let ((c (db-guardian)))
-    (if c
+  (let ((db (db-guardian)))
+    (if db
         (begin
-          (sqlite-close c)
+          (sqlite-close db)
           (pump-db-guardian)))))
 (add-hook! after-gc-hook pump-db-guardian)
 
@@ -154,8 +157,92 @@
                      flags
                      (if vfs (string->utf8-pointer vfs) %null-pointer))))
         (if (zero? ret)
-            (let ((c (make-sqlite-db (dereference-pointer out-db) #t)))
-              (db-guardian c)
-              c)
+            (let ((db (make-db (dereference-pointer out-db) #t)))
+              (db-guardian db)
+              db)
             (sqlite-error #f 'sqlite-open ret (static-errcode->errmsg ret)))))))
 
+;;;
+;;; SQL statements
+;;;
+
+(define-record-type <sqlite-stmt>
+  (make-stmt pointer live? reset?)
+  stmt?
+  (pointer stmt-pointer)
+  (live? stmt-live? set-stmt-live?!)
+  (reset? stmt-reset? set-stmt-reset?!))
+
+(define sqlite-finalize
+  (let ((f (pointer->procedure
+            int
+            (dynamic-func "sqlite3_finalize" libsqlite3)
+            (list '*))))
+    (lambda (stmt)
+      (if (stmt-live? stmt)
+          (begin
+            (let ((p (stmt-pointer stmt)))
+              (set-stmt-live?! stmt #f)
+              (f p)))))))
+
+(define *stmt-map* (make-weak-key-hash-table))
+(define (stmt->db stmt)
+  (hashq-ref *stmt-map* stmt))
+
+(define stmt-guardian (make-guardian))
+(define (pump-stmt-guardian)
+  (let ((stmt (stmt-guardian)))
+    (if stmt
+        (begin
+          (sqlite-finalize stmt)
+          (pump-stmt-guardian)))))
+(add-hook! after-gc-hook pump-stmt-guardian)
+
+(define sqlite-reset
+  (let ((f (pointer->procedure
+            int
+            (dynamic-func "sqlite3_reset" libsqlite3)
+            (list '*))))
+    (lambda (stmt)
+      (if (stmt-live? stmt)
+          (let ((p (stmt-pointer stmt)))
+            (set-stmt-reset?! stmt #t)
+            (f p))
+          (error "statement already finalized" stmt)))))
+
+(define (assert-live-stmt! stmt)
+  (if (not (stmt-live? stmt))
+      (error "statement already finalized" stmt)))
+
+(define (assert-live-db! db)
+  (if (not (db-open? db))
+      (error "database already closed" db)))
+
+(define sqlite-prepare
+  (let ((f (pointer->procedure
+            int
+            (dynamic-func "sqlite3_prepare_v2" libsqlite3)
+            (list '* '* int '* '*))))
+    (lambda (db sql)
+      (assert-live-db! db)
+      (let* ((out-stmt (bytevector->pointer (make-bytevector (sizeof '*) 0)))
+             (out-tail (bytevector->pointer (make-bytevector (sizeof '*) 0)))
+             (bv (string->utf8 sql))
+             (bvp (bytevector->pointer bv))
+             (ret (f (db-pointer db)
+                     bvp
+                     (bytevector-length bv)
+                     out-stmt
+                     out-tail)))
+        (if (zero? ret)
+            (if (= (bytevector-length bv)
+                   (- (pointer-address (dereference-pointer out-tail))
+                      (pointer-address bvp)))
+                (let ((stmt (make-stmt (dereference-pointer out-stmt) #t #t)))
+                  (stmt-guardian stmt)
+                  (hashq-set! *stmt-map* stmt db)
+                  stmt)
+                (error "input sql has useless tail"
+                       (utf8-pointer->string
+                        (dereference-pointer out-tail))))
+            (check-error db 'sqlite-prepare))))))
