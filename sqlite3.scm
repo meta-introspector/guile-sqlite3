@@ -31,6 +31,25 @@
   #:export (sqlite-open
             sqlite-close))
 
+;;
+;; Utils
+;;
+(define (string->utf8-pointer s)
+  (bytevector->pointer (string->utf8 s)))
+
+(define strlen
+  (pointer->procedure size_t
+                      (dynamic-pointer "strlen" (dynamic-link))
+                      '(*)))
+
+(define (utf8-pointer->string p)
+  (utf8->string (pointer->bytevector p (strlen p))))
+
+
+;;
+;; Constants
+;;
+
 ;; FIXME: snarf using compiler. These are just copied from the header...
 ;;
 (define SQLITE_OPEN_READONLY         #x00000001) ;; Ok for sqlite3_open_v2()
@@ -52,43 +71,76 @@
 
 (define libsqlite3 (dynamic-link "libsqlite3"))
 
-(define-record-type <sqlite-connection>
-  (make-sqlite-connection pointer open?)
-  sqlite-connection?
-  (pointer sqlite-connection-pointer)
-  (open? sqlite-connection-open? set-sqlite-connection-open?!))
+(define-record-type <sqlite-db>
+  (make-sqlite-db pointer open?)
+  sqlite-db?
+  (pointer sqlite-db-pointer)
+  (open? sqlite-db-open? set-sqlite-db-open?!))
+
+(define sqlite-errmsg
+  (let ((f (pointer->procedure
+            '*
+            (dynamic-func "sqlite3_errmsg" libsqlite3)
+            (list '*))))
+    (lambda (db)
+      (utf8-pointer->string (f (sqlite-db-pointer db))))))
+
+(define sqlite-errcode
+  (let ((f (pointer->procedure
+            int
+            (dynamic-func "sqlite3_extended_errcode" libsqlite3)
+            (list '*))))
+    (lambda (db)
+      (f (sqlite-db-pointer db)))))
+
+(define* (sqlite-error db who #:optional code
+                       (errmsg (and db (sqlite-errmsg db))))
+  (throw 'sqlite-error who code errmsg))
+
+(define* (check-error db #:optional who)
+  (let ((code (sqlite-errcode db)))
+    (if (not (zero? code))
+        (sqlite-error db who code))))
 
 (define sqlite-close
   (let ((f (pointer->procedure
             int
             (dynamic-func "sqlite3_close" libsqlite3)
             (list '*))))
-    (lambda (connection)
-      (if (sqlite-connection-open? connection)
+    (lambda (db)
+      (if (sqlite-db-open? db)
           (begin
-            (let ((p (sqlite-connection-pointer connection)))
-              (set-sqlite-connection-open?! connection #f)
+            (let ((p (sqlite-db-pointer db)))
+              (set-sqlite-db-open?! db #f)
               (f p)))))))
 
-(define connection-guardian (make-guardian))
-(define (pump-connection-guardian)
-  (let ((c (connection-guardian)))
+(define db-guardian (make-guardian))
+(define (pump-db-guardian)
+  (let ((c (db-guardian)))
     (if c
         (begin
           (sqlite-close c)
-          (pump-connection-guardian)))))
-(add-hook! after-gc-hook pump-connection-guardian)
+          (pump-db-guardian)))))
+(add-hook! after-gc-hook pump-db-guardian)
 
-(define (string->utf8-pointer s)
-  (bytevector->pointer (string->utf8 s)))
-
-(define strlen
-  (pointer->procedure size_t
-                      (dynamic-pointer "strlen" (dynamic-link))
-                      '(*)))
-
-(define (utf8-pointer->string p)
-  (utf8->string (pointer->bytevector p (strlen p))))
+(define (static-errcode->errmsg code)
+  (case code
+    ((1) "SQL error or missing database")
+    ((2) "Internal logic error in SQLite")
+    ((3) "Access permission denied")
+    ((5) "The database file is locked")
+    ((6) "A table in the database is locked")
+    ((7) "A malloc() failed")
+    ((8) "Attempt to write a readonly database")
+    ((10) "Some kind of disk I/O error occurred")
+    ((11) "The database disk image is malformed")
+    ((14) "Unable to open the database file")
+    ((21) "Library used incorrectly")
+    ((22) "Uses OS features not supported on host")
+    ((23) "Authorization denied")
+    ((24) "Auxiliary database format error")
+    ((26) "File opened that is not a database file")
+    (else "Unknown error")))
 
 (define sqlite-open
   (let ((f (pointer->procedure
@@ -102,7 +154,8 @@
                      flags
                      (if vfs (string->utf8-pointer vfs) %null-pointer))))
         (if (zero? ret)
-            (let ((c (make-sqlite-connection (dereference-pointer out-db) #t)))
-              (connection-guardian c)
+            (let ((c (make-sqlite-db (dereference-pointer out-db) #t)))
+              (db-guardian c)
               c)
-            (error "error opening database" ret))))))
+            (sqlite-error #f 'sqlite-open ret (static-errcode->errmsg ret)))))))
+
