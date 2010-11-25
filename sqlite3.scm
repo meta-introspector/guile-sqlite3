@@ -30,7 +30,13 @@
   #:use-module (srfi srfi-9)
   #:export (sqlite-open
             sqlite-close
+
             sqlite-prepare
+            sqlite-bind
+            sqlite-column-names
+            sqlite-step
+            sqlite-fold
+            sqlite-map
             sqlite-reset
             sqlite-finalize))
 
@@ -199,15 +205,15 @@
 (add-hook! after-gc-hook pump-stmt-guardian)
 
 (define sqlite-reset
-  (let ((f (pointer->procedure
-            int
-            (dynamic-func "sqlite3_reset" libsqlite3)
-            (list '*))))
+  (let ((reset (pointer->procedure
+                int
+                (dynamic-func "sqlite3_reset" libsqlite3)
+                (list '*))))
     (lambda (stmt)
       (if (stmt-live? stmt)
           (let ((p (stmt-pointer stmt)))
             (set-stmt-reset?! stmt #t)
-            (f p))
+            (reset p))
           (error "statement already finalized" stmt)))))
 
 (define (assert-live-stmt! stmt)
@@ -219,21 +225,21 @@
       (error "database already closed" db)))
 
 (define sqlite-prepare
-  (let ((f (pointer->procedure
-            int
-            (dynamic-func "sqlite3_prepare_v2" libsqlite3)
-            (list '* '* int '* '*))))
+  (let ((prepare (pointer->procedure
+                  int
+                  (dynamic-func "sqlite3_prepare_v2" libsqlite3)
+                  (list '* '* int '* '*))))
     (lambda (db sql)
       (assert-live-db! db)
       (let* ((out-stmt (bytevector->pointer (make-bytevector (sizeof '*) 0)))
              (out-tail (bytevector->pointer (make-bytevector (sizeof '*) 0)))
              (bv (string->utf8 sql))
              (bvp (bytevector->pointer bv))
-             (ret (f (db-pointer db)
-                     bvp
-                     (bytevector-length bv)
-                     out-stmt
-                     out-tail)))
+             (ret (prepare (db-pointer db)
+                           bvp
+                           (bytevector-length bv)
+                           out-stmt
+                           out-tail)))
         (if (zero? ret)
             (if (= (bytevector-length bv)
                    (- (pointer-address (dereference-pointer out-tail))
@@ -246,3 +252,165 @@
                        (utf8-pointer->string
                         (dereference-pointer out-tail))))
             (check-error db 'sqlite-prepare))))))
+
+(define key->index
+  (lambda (stmt key)
+    key))
+
+(define sqlite-bind
+  (let ((bind-blob (pointer->procedure
+                    int
+                    (dynamic-func "sqlite3_bind_blob" libsqlite3)
+                    (list '* int '* int '*)))
+        (bind-text (pointer->procedure
+                    int
+                    (dynamic-func "sqlite3_bind_text" libsqlite3)
+                    (list '* int '* int '*)))
+        (bind-int64 (pointer->procedure
+                     int
+                     (dynamic-func "sqlite3_bind_int64" libsqlite3)
+                     (list '* int int64)))
+        (bind-double (pointer->procedure
+                      int
+                      (dynamic-func "sqlite3_bind_blob" libsqlite3)
+                      (list '* int double)))
+        (bind-null (pointer->procedure
+                    int
+                    (dynamic-func "sqlite3_bind_null" libsqlite3)
+                    (list '* int)))
+        (sqlite-transient (make-bytevector (sizeof '*) #xff)))
+    (lambda (stmt key val)
+      (assert-live-stmt! stmt)
+      (let ((idx (key->index stmt key))
+            (p (stmt-pointer stmt)))
+        (cond
+         ((bytevector? val)
+          (bind-blob p idx (bytevector->pointer val) (bytevector-length val)
+                     sqlite-transient))
+         ((string? val)
+          (let ((bv ((string->utf8 val))))
+            (bind-text p idx (bytevector->pointer bv) (bytevector-length bv)
+                       sqlite-transient)))
+         ((and (integer? val) (exact? val))
+          (bind-int64 p idx val))
+         ((number? val)
+          (bind-double p idx (exact->inexact val)))
+         ((not val)
+          (bind-null p idx))
+         (else
+          (error "unexpected value" val)))
+        (check-error (stmt->db stmt))))))
+
+(define sqlite-column-count
+  (let ((column-count
+         (pointer->procedure
+          int
+          (dynamic-pointer "sqlite3_column_count" libsqlite3)
+          (list '*))))
+    (lambda (stmt)
+      (assert-live-stmt! stmt)
+      (column-count (stmt-pointer stmt)))))
+
+(define sqlite-column-name
+  (let ((column-name
+         (pointer->procedure
+          '*
+          (dynamic-pointer "sqlite3_column_name" libsqlite3)
+          (list '* int))))
+    (lambda (stmt i)
+      (assert-live-stmt! stmt)
+      (utf8-pointer->string (column-name (stmt-pointer stmt) i)))))
+
+(define sqlite-column-value
+  (let ((value-type
+         (pointer->procedure
+          int
+          (dynamic-pointer "sqlite3_column_type" libsqlite3)
+          (list '* int)))
+        (value-int
+         (pointer->procedure
+          int64
+          (dynamic-pointer "sqlite3_column_int64" libsqlite3)
+          (list '* int)))
+        (value-double
+         (pointer->procedure
+          double
+          (dynamic-pointer "sqlite3_column_double" libsqlite3)
+          (list '* int)))
+        (value-text
+         (pointer->procedure
+          '*
+          (dynamic-pointer "sqlite3_column_text" libsqlite3)
+          (list '* int)))
+        (value-blob
+         (pointer->procedure
+          '*
+          (dynamic-pointer "sqlite3_column_blob" libsqlite3)
+          (list '* int)))
+        (value-bytes
+         (pointer->procedure
+          int
+          (dynamic-pointer "sqlite3_column_bytes" libsqlite3)
+          (list '* int))))
+    (lambda (stmt i)
+      (assert-live-stmt! stmt)
+      (case (value-type (stmt-pointer stmt) i)
+        ((1) ; SQLITE_INTEGER
+         (value-int (stmt-pointer stmt) i))
+        ((2) ; SQLITE_FLOAT
+         (value-double (stmt-pointer stmt) i))
+        ((3) ; SQLITE3_TEXT
+         (let ((p (value-blob (stmt-pointer stmt) i)))
+           (utf8->string
+            (pointer->bytevector p (value-bytes (stmt-pointer stmt) i)))))
+        ((4) ; SQLITE_BLOB
+         (let ((p (value-blob (stmt-pointer stmt) i)))
+           (pointer->bytevector p (value-bytes (stmt-pointer stmt) i))))
+        ((5) ; SQLITE_NULL
+         #f)))))
+
+(define (sqlite-column-names stmt)
+  (let ((v (make-vector (sqlite-column-count stmt))))
+    (let lp ((i 0))
+      (if (< i (vector-length v))
+          (begin
+            (vector-set! v i (sqlite-column-name stmt i))
+            (lp (1+ i)))
+          v))))
+
+(define (sqlite-row stmt)
+  (let ((v (make-vector (sqlite-column-count stmt))))
+    (let lp ((i 0))
+      (if (< i (vector-length v))
+          (begin
+            (vector-set! v i (sqlite-column-value stmt i))
+            (lp (1+ i)))
+          v))))
+
+(define sqlite-step
+  (let ((step (pointer->procedure
+               int
+               (dynamic-pointer "sqlite3_step" libsqlite3)
+               (list '*))))
+    (lambda (stmt)
+      (assert-live-stmt! stmt)
+      (let ((ret (step (stmt-pointer stmt))))
+        (case ret
+          ((100) ; SQLITE_ROW
+           (sqlite-row stmt))
+          ((101) ; SQLITE_DONE
+           #f)
+          (else
+           (check-error (stmt->db stmt))
+           (error "shouldn't get here")))))))
+
+(define (sqlite-fold stmt kons knil)
+  (assert-live-stmt! stmt)
+  (let lp ((seed knil))
+    (let ((row (sqlite-step stmt)))
+      (if row
+          (lp (kons row seed))
+          seed))))
+
+(define (sqlite-map proc stmt)
+  (reverse! (sqlite-fold stmt cons '())))
