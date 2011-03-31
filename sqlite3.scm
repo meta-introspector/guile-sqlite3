@@ -61,15 +61,10 @@
 ;; Utils
 ;;
 (define (string->utf8-pointer s)
-  (bytevector->pointer (string->utf8 s)))
-
-(define strlen
-  (pointer->procedure size_t
-                      (dynamic-pointer "strlen" (dynamic-link))
-                      '(*)))
+  (string->pointer s "utf-8"))
 
 (define (utf8-pointer->string p)
-  (utf8->string (pointer->bytevector p (strlen p))))
+  (pointer->string p -1 "utf-8"))
 
 
 ;;
