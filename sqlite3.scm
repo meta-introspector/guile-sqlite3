@@ -38,7 +38,24 @@
             sqlite-fold
             sqlite-map
             sqlite-reset
-            sqlite-finalize))
+            sqlite-finalize
+
+            SQLITE_OPEN_READONLY
+            SQLITE_OPEN_READWRITE
+            SQLITE_OPEN_CREATE
+            SQLITE_OPEN_DELETEONCLOSE
+            SQLITE_OPEN_EXCLUSIVE
+            SQLITE_OPEN_MAIN_DB
+            SQLITE_OPEN_TEMP_DB
+            SQLITE_OPEN_TRANSIENT_DB
+            SQLITE_OPEN_MAIN_JOURNAL
+            SQLITE_OPEN_TEMP_JOURNAL
+            SQLITE_OPEN_SUBJOURNAL
+            SQLITE_OPEN_MASTER_JOURNAL
+            SQLITE_OPEN_NOMUTEX
+            SQLITE_OPEN_FULLMUTEX
+            SQLITE_OPEN_SHAREDCACHE
+            SQLITE_OPEN_PRIVATECACHE))
 
 ;;
 ;; Utils
