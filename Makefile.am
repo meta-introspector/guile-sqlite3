@@ -24,6 +24,6 @@ SUFFIXES = .scm .go
 
 TESTS = 					\
 	tests/basic.test
-TESTS_ENVIRONMENT = $(abs_top_builddir)/env $(GUILE) --no-autocompile
+TESTS_ENVIRONMENT = $(abs_top_builddir)/env $(GUILE) --no-auto-compile
 
 EXTRA_DIST = $(SOURCES) $(NOCOMP_SOURCES) $(TESTS)
