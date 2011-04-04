@@ -425,4 +425,5 @@
           seed))))
 
 (define (sqlite-map proc stmt)
-  (reverse! (sqlite-fold cons '() stmt)))
+  (map proc
+       (reverse! (sqlite-fold cons '() stmt))))
