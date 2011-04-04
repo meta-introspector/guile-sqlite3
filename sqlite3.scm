@@ -290,7 +290,8 @@
                     int
                     (dynamic-func "sqlite3_bind_null" libsqlite3)
                     (list '* int)))
-        (sqlite-transient (make-bytevector (sizeof '*) #xff)))
+        (sqlite-transient (bytevector->pointer
+                           (make-bytevector (sizeof '*) #xff))))
     (lambda (stmt key val)
       (assert-live-stmt! stmt)
       (let ((idx (key->index stmt key))
@@ -300,7 +301,7 @@
           (bind-blob p idx (bytevector->pointer val) (bytevector-length val)
                      sqlite-transient))
          ((string? val)
-          (let ((bv ((string->utf8 val))))
+          (let ((bv (string->utf8 val)))
             (bind-text p idx (bytevector->pointer bv) (bytevector-length bv)
                        sqlite-transient)))
          ((and (integer? val) (exact? val))
