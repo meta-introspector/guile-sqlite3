@@ -373,11 +373,15 @@
          (value-double (stmt-pointer stmt) i))
         ((3) ; SQLITE3_TEXT
          (let ((p (value-blob (stmt-pointer stmt) i)))
-           (utf8->string
-            (pointer->bytevector p (value-bytes (stmt-pointer stmt) i)))))
+           (if (eq? p %null-pointer)
+               ""
+               (utf8->string
+                (pointer->bytevector p (value-bytes (stmt-pointer stmt) i))))))
         ((4) ; SQLITE_BLOB
          (let ((p (value-blob (stmt-pointer stmt) i)))
-           (pointer->bytevector p (value-bytes (stmt-pointer stmt) i))))
+           (if (eq? p %null-pointer)
+               (make-bytevector 0)
+               (pointer->bytevector p (value-bytes (stmt-pointer stmt) i)))))
         ((5) ; SQLITE_NULL
          #f)))))
 
