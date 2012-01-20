@@ -31,6 +31,7 @@
   #:export (sqlite-open
             sqlite-close
 
+	    sqlite-enable-load-extension
             sqlite-prepare
             sqlite-bind
             sqlite-column-names
@@ -179,6 +180,14 @@
               (db-guardian db)
               db)
             (sqlite-error #f 'sqlite-open ret (static-errcode->errmsg ret)))))))
+
+(define sqlite-enable-load-extension
+  (let ((ele (pointer->procedure
+	      int
+	      (dynamic-func "sqlite3_enable_load_extension" libsqlite3)
+	      (list '* int))))
+    (lambda (db onoff)
+      (ele (db-pointer db) onoff))))
 
 ;;;
 ;;; SQL statements
