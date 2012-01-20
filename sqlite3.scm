@@ -169,7 +169,9 @@
             int
             (dynamic-func "sqlite3_open_v2" libsqlite3)
             (list '* '* int '*))))
-    (lambda* (filename #:optional (flags 0) (vfs #f))
+    (lambda* (filename #:optional
+                       (flags (logior SQLITE_OPEN_READWRITE SQLITE_OPEN_CREATE))
+                       (vfs #f))
       (let* ((out-db (bytevector->pointer (make-bytevector (sizeof '*) 0)))
              (ret (f (string->utf8-pointer filename)
                      out-db
