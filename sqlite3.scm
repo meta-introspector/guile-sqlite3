@@ -301,8 +301,8 @@
                     int
                     (dynamic-func "sqlite3_bind_null" libsqlite3)
                     (list '* int)))
-        (sqlite-transient (bytevector->pointer
-                           (make-bytevector (sizeof '*) #xff))))
+        (sqlite-transient (make-pointer
+                           (bit-extract (lognot 0) 0 (* 8 (sizeof '*))))))
     (lambda (stmt key val)
       (assert-live-stmt! stmt)
       (let ((idx (key->index stmt key))
