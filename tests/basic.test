@@ -54,6 +54,15 @@
 (sqlite-exec db "select * from project")
 (format #t "~40tOk~%")
 
+(format #t "Inserting a dataset using sqlite-bind: ")
+(sqlite-exec db "CREATE TABLE foos (dbid INTEGER PRIMARY KEY, name TEXT)")
+(let ((stmt (sqlite-prepare db "INSERT INTO foos(name) VALUES(?)")))
+  (sqlite-bind stmt 1 "myfoo")
+  (sqlite-step stmt)
+  (sqlite-finalize stmt))
+(sqlite-exec db "DROP TABLE IF EXISTS foos")
+(format #t "~40tOk~%")
+
 (sqlite-close db)
 
 (format #t "Removing database ~a" db-name)
