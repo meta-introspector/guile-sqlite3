@@ -295,7 +295,7 @@
                      (list '* int int64)))
         (bind-double (pointer->procedure
                       int
-                      (dynamic-func "sqlite3_bind_blob" libsqlite3)
+                      (dynamic-func "sqlite3_bind_double" libsqlite3)
                       (list '* int double)))
         (bind-null (pointer->procedure
                     int
