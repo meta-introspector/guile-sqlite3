@@ -6,14 +6,8 @@ AC_CONFIG_AUX_DIR([build-aux])
 AM_INIT_AUTOMAKE([color-tests -Wall -Wno-portability])
 AM_SILENT_RULES([yes])
 
-GUILE_PROGS
-
-if $GUILE_TOOLS | grep -q compile; then
-   # everything cool
-   true
-else
-   AC_MSG_ERROR([Guile 2.0 required.])
-fi
+GUILE_PROGS([2.2 2.0])
+AC_SUBST([GUILE_EFFECTIVE_VERSION])
 
 AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([env], [chmod +x env])
