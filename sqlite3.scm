@@ -1,5 +1,5 @@
 ;; Guile-SQLite3
-;; Copyright (C) 2010 Andy Wingo <wingo at pobox dot com>
+;; Copyright (C) 2010, 2014 Andy Wingo <wingo at pobox dot com>
 
 ;; This library is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as
@@ -37,6 +37,7 @@
             sqlite-column-names
             sqlite-step
             sqlite-fold
+            sqlite-fold-right
             sqlite-map
             sqlite-reset
             sqlite-finalize
@@ -439,6 +440,14 @@
       (if row
           (lp (kons row seed))
           seed))))
+
+(define (sqlite-fold-right kons knil stmt)
+  (assert-live-stmt! stmt)
+  (let lp ()
+    (let ((row (sqlite-step stmt)))
+      (if row
+          (kons row (lp))
+          knil))))
 
 (define (sqlite-map proc stmt)
   (map proc
