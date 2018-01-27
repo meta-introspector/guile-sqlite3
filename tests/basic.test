@@ -24,6 +24,11 @@
   (let ((stmt (sqlite-prepare db sql)))
     (sqlite-map display stmt)))
 
+(define (sqlite-exec* db sql key value)
+  (let ((stmt (sqlite-prepare db sql)))
+    (sqlite-bind stmt key value)
+    (sqlite-map display stmt)))
+
 ;; Cleanup database so we can check creation
 (define db-name "tests/simple.db")
 (if (file-exists? db-name)
@@ -52,6 +57,14 @@
 
 (format #t "Reading dataset: ")
 (sqlite-exec db "select * from project")
+(format #t "~40tOk~%")
+
+(format #t "Reading dataset with named parameter: ")
+(sqlite-exec* db "select * from project where 'bla' = :foo" ":foo" "bla")
+(format #t "~40tOk~%")
+
+(format #t "Reading dataset with named parameter, v2: ")
+(sqlite-exec* db "select * from project where 'bla' = :foo" 'foo "bla")
 (format #t "~40tOk~%")
 
 (format #t "Inserting a dataset using sqlite-bind: ")

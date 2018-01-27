@@ -41,6 +41,7 @@
             sqlite-map
             sqlite-reset
             sqlite-finalize
+            sqlite-bind-parameter-index
 
             SQLITE_OPEN_READONLY
             SQLITE_OPEN_READWRITE
@@ -284,9 +285,30 @@
                         (dereference-pointer out-tail))))
             (check-error db 'sqlite-prepare))))))
 
+(define sqlite-bind-parameter-index
+  (let ((bind-parameter-index (pointer->procedure
+                  int
+                  (dynamic-func "sqlite3_bind_parameter_index" libsqlite3)
+                  (list '* '*))))
+    (lambda (stmt name)
+      (assert-live-stmt! stmt)
+      (let* ((ret (bind-parameter-index (stmt-pointer stmt)
+                                        (string->utf8-pointer name))))
+        (if (> ret 0)
+            ret
+            (begin
+              (check-error (stmt->db stmt) 'sqlite-bind-parameter-index)
+              (write ret)
+              (newline)
+              (error "No such parameter" name)))))))
+
 (define key->index
   (lambda (stmt key)
-    key))
+    (cond
+     ((string? key) (sqlite-bind-parameter-index stmt key))
+     ((symbol? key) (sqlite-bind-parameter-index stmt
+                     (string-append ":" (symbol->string key))))
+     (else key))))
 
 (define sqlite-bind
   (let ((bind-blob (pointer->procedure
