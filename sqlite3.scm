@@ -57,7 +57,10 @@
             SQLITE_OPEN_NOMUTEX
             SQLITE_OPEN_FULLMUTEX
             SQLITE_OPEN_SHAREDCACHE
-            SQLITE_OPEN_PRIVATECACHE))
+            SQLITE_OPEN_PRIVATECACHE
+
+            SQLITE_CONSTRAINT
+            SQLITE_CONSTRAINT_PRIMARYKEY))
 
 ;;
 ;; Utils
@@ -91,6 +94,10 @@
 (define SQLITE_OPEN_FULLMUTEX        #x00010000) ;; Ok for sqlite3_open_v2()
 (define SQLITE_OPEN_SHAREDCACHE      #x00020000) ;; Ok for sqlite3_open_v2()
 (define SQLITE_OPEN_PRIVATECACHE     #x00040000) ;; Ok for sqlite3_open_v2()
+
+(define SQLITE_CONSTRAINT 19)
+(define SQLITE_CONSTRAINT_PRIMARYKEY
+  (logior SQLITE_CONSTRAINT (ash 6 8)))
 
 (define libsqlite3 (dynamic-link "libsqlite3"))
 
