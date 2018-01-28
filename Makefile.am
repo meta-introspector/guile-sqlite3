@@ -8,6 +8,6 @@ SOURCES =					\
 
 TESTS = 					\
 	tests/basic.test
-TESTS_ENVIRONMENT = $(abs_top_builddir)/env $(GUILE) --no-auto-compile
+TEST_LOG_COMPILER = $(abs_top_builddir)/env $(GUILE) --no-auto-compile
 
 EXTRA_DIST += $(TESTS)
