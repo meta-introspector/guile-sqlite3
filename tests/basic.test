@@ -55,6 +55,11 @@
 (sqlite-exec db "insert into project values (1, 'Guile', '')")
 (format #t "~40tOk~%")
 
+(let* ((s "SELECT * FROM project")
+       (stmt (sqlite-prepare db s #:cache? #t)))
+  (unless (eq? stmt (sqlite-prepare db s #:cache? #t))
+    (error "caching is not caching much!")))
+
 (format #t "Reading dataset: ")
 (sqlite-exec db "select * from project")
 (format #t "~40tOk~%")

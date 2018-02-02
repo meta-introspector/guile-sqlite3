@@ -27,11 +27,15 @@
 (define-module (sqlite3)
   #:use-module (system foreign)
   #:use-module (rnrs bytevectors)
+  #:use-module (ice-9 match)
+  #:use-module (srfi srfi-1)
   #:use-module (srfi srfi-9)
+  #:use-module (srfi srfi-19)
   #:export (sqlite-open
             sqlite-close
 
 	    sqlite-enable-load-extension
+            sqlite-prepare*
             sqlite-prepare
             sqlite-bind
             sqlite-column-names
@@ -103,10 +107,11 @@
 (define libsqlite3 (dynamic-link "libsqlite3"))
 
 (define-record-type <sqlite-db>
-  (make-db pointer open?)
+  (make-db pointer open? stmts)
   db?
   (pointer db-pointer)
-  (open? db-open? set-db-open?!))
+  (open? db-open? set-db-open?!)
+  (stmts db-stmts))
 
 (define sqlite-errmsg
   (let ((f (pointer->procedure
@@ -187,7 +192,8 @@
                      flags
                      (if vfs (string->utf8-pointer vfs) %null-pointer))))
         (if (zero? ret)
-            (let ((db (make-db (dereference-pointer out-db) #t)))
+            (let ((db (make-db (dereference-pointer out-db) #t
+                               (make-hash-table))))
               (db-guardian db)
               db)
             (sqlite-error #f 'sqlite-open ret (static-errcode->errmsg ret)))))))
@@ -200,16 +206,32 @@
     (lambda (db onoff)
       (ele (db-pointer db) onoff))))
 
+
 ;;;
 ;;; SQL statements
 ;;;
 
 (define-record-type <sqlite-stmt>
-  (make-stmt pointer live? reset?)
+  (make-stmt pointer live? reset? cached?)
   stmt?
   (pointer stmt-pointer)
   (live? stmt-live? set-stmt-live?!)
-  (reset? stmt-reset? set-stmt-reset?!))
+  (reset? stmt-reset? set-stmt-reset?!)
+  (cached? stmt-cached?))
+
+(define sqlite-remove-statement!
+  (lambda (db stmt)
+    (when (stmt-cached? stmt)
+      (let* ((stmts (db-stmts db))
+             (key   (catch 'value
+                      (lambda ()
+                        (hash-for-each (lambda (key value)
+                                         (when (eq? value stmt)
+                                           (throw 'value key)))
+                                       stmts)
+                        #f)
+                      (lambda (_ key) key))))
+        (hash-remove! stmts key)))))
 
 (define sqlite-finalize
   (let ((f (pointer->procedure
@@ -218,10 +240,10 @@
             (list '*))))
     (lambda (stmt)
       (if (stmt-live? stmt)
-          (begin
-            (let ((p (stmt-pointer stmt)))
-              (set-stmt-live?! stmt #f)
-              (f p)))))))
+          (let ((p (stmt-pointer stmt)))
+            (sqlite-remove-statement! (stmt->db stmt) stmt)
+            (set-stmt-live?! stmt #f)
+            (f p))))))
 
 (define *stmt-map* (make-weak-key-hash-table))
 (define (stmt->db stmt)
@@ -256,12 +278,12 @@
   (if (not (db-open? db))
       (error "database already closed" db)))
 
-(define sqlite-prepare
+(define %sqlite-prepare
   (let ((prepare (pointer->procedure
                   int
                   (dynamic-func "sqlite3_prepare_v2" libsqlite3)
                   (list '* '* int '* '*))))
-    (lambda (db sql)
+    (lambda* (db sql #:key cache?)
       (assert-live-db! db)
       (let* ((out-stmt (bytevector->pointer (make-bytevector (sizeof '*) 0)))
              (out-tail (bytevector->pointer (make-bytevector (sizeof '*) 0)))
@@ -276,7 +298,8 @@
             (if (= (bytevector-length bv)
                    (- (pointer-address (dereference-pointer out-tail))
                       (pointer-address bvp)))
-                (let ((stmt (make-stmt (dereference-pointer out-stmt) #t #t)))
+                (let ((stmt (make-stmt (dereference-pointer out-stmt) #t #t
+                                       cache?)))
                   (stmt-guardian stmt)
                   (hashq-set! *stmt-map* stmt db)
                   stmt)
@@ -284,6 +307,18 @@
                        (utf8-pointer->string
                         (dereference-pointer out-tail))))
             (check-error db 'sqlite-prepare))))))
+
+(define* (sqlite-prepare db sql #:key cache?)
+  (if cache?
+      (match (hash-ref (db-stmts db) sql)
+        (#f
+         (let ((stmt (%sqlite-prepare db sql #:cache? #t)))
+           (hash-set! (db-stmts db) sql stmt)
+           stmt))
+        (stmt
+         (sqlite-reset stmt)
+         stmt))
+      (%sqlite-prepare db sql)))
 
 (define sqlite-bind-parameter-index
   (let ((bind-parameter-index (pointer->procedure
