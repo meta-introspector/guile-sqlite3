@@ -38,6 +38,7 @@
             sqlite-prepare*
             sqlite-prepare
             sqlite-bind
+            sqlite-bind-arguments
             sqlite-column-names
             sqlite-step
             sqlite-fold
@@ -389,6 +390,21 @@
          (else
           (error "unexpected value" val)))
         (check-error (stmt->db stmt))))))
+
+(define (sqlite-bind-arguments stmt . args)
+  "Bind STMT parameters, one after another, to ARGS.
+Also bind named parameters to the respective ones."
+  (let loop ((i 1)
+             (args args))
+    (match args
+      (()
+       #f)
+      (((? keyword? kw) value . rest)
+       (sqlite-bind stmt (keyword->symbol kw) value)
+       (loop i rest))
+      ((arg . rest)
+       (sqlite-bind stmt i arg)
+       (loop (+ 1 i) rest)))))
 
 (define sqlite-column-count
   (let ((column-count
