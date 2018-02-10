@@ -1,5 +1,6 @@
 ;; Guile-SQLite3
 ;; Copyright (C) 2010, 2014 Andy Wingo <wingo at pobox dot com>
+;; Copyright (C) 2018 Ludovic Courtès <ludo@gnu.org>
 
 ;; This library is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU Lesser General Public License as
@@ -114,6 +115,14 @@
   (open? db-open? set-db-open?!)
   (stmts db-stmts))
 
+(define-record-type <sqlite-stmt>
+  (make-stmt pointer live? reset? cached?)
+  stmt?
+  (pointer stmt-pointer)
+  (live? stmt-live? set-stmt-live?!)
+  (reset? stmt-reset? set-stmt-reset?!)
+  (cached? stmt-cached? set-stmt-cached?!))
+
 (define sqlite-errmsg
   (let ((f (pointer->procedure
             '*
@@ -145,11 +154,17 @@
             (dynamic-func "sqlite3_close" libsqlite3)
             (list '*))))
     (lambda (db)
-      (if (db-open? db)
-          (begin
-            (let ((p (db-pointer db)))
-              (set-db-open?! db #f)
-              (f p)))))))
+      (when (db-open? db)
+        ;; Finalize cached statements.
+        (hash-for-each (lambda (sql stmt)
+                         (set-stmt-cached?! stmt #f)
+                         (sqlite-finalize stmt))
+                       (db-stmts db))
+        (hash-clear! (db-stmts db))
+
+        (let ((p (db-pointer db)))
+          (set-db-open?! db #f)
+          (f p))))))
 
 (define db-guardian (make-guardian))
 (define (pump-db-guardian)
@@ -208,17 +223,10 @@
       (ele (db-pointer db) onoff))))
 
 
+
 ;;;
 ;;; SQL statements
 ;;;
-
-(define-record-type <sqlite-stmt>
-  (make-stmt pointer live? reset? cached?)
-  stmt?
-  (pointer stmt-pointer)
-  (live? stmt-live? set-stmt-live?!)
-  (reset? stmt-reset? set-stmt-reset?!)
-  (cached? stmt-cached?))
 
 (define sqlite-remove-statement!
   (lambda (db stmt)
@@ -240,11 +248,15 @@
             (dynamic-func "sqlite3_finalize" libsqlite3)
             (list '*))))
     (lambda (stmt)
-      (if (stmt-live? stmt)
-          (let ((p (stmt-pointer stmt)))
-            (sqlite-remove-statement! (stmt->db stmt) stmt)
-            (set-stmt-live?! stmt #f)
-            (f p))))))
+      ;; Note: When STMT is cached, this is a no-op.  This ensures caching
+      ;; actually works while still separating concerns: users can turn
+      ;; caching on and off without having to change the rest of their code.
+      (when (and (stmt-live? stmt)
+                 (not (stmt-cached? stmt)))
+        (let ((p (stmt-pointer stmt)))
+          (sqlite-remove-statement! (stmt->db stmt) stmt)
+          (set-stmt-live?! stmt #f)
+          (f p))))))
 
 (define *stmt-map* (make-weak-key-hash-table))
 (define (stmt->db stmt)
