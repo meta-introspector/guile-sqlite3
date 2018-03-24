@@ -41,6 +41,8 @@
                                         SQLITE_OPEN_READWRITE)))
 (format #t "~40tOk~%")
 
+(sqlite-busy-timeout db 20)
+
 (format #t "Creating table 'project':")
 (sqlite-exec
  db

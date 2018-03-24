@@ -48,6 +48,7 @@
             sqlite-reset
             sqlite-finalize
             sqlite-bind-parameter-index
+            sqlite-busy-timeout
 
             SQLITE_OPEN_READONLY
             SQLITE_OPEN_READWRITE
@@ -510,6 +511,17 @@ Also bind named parameters to the respective ones."
             (vector-set! v i (sqlite-column-value stmt i))
             (lp (1+ i)))
           v))))
+
+(define sqlite-busy-timeout
+  (let ((f (pointer->procedure
+            int
+            (dynamic-func "sqlite3_busy_timeout" libsqlite3)
+            (list '* int))))
+    (lambda (db value)
+      (assert-live-db! db)
+      (let ((ret (f (db-pointer db) value)))
+        (when (not (zero? ret))
+          (check-error db 'sqlite-busy-timeout))))))
 
 (define sqlite-step
   (let ((step (pointer->procedure
