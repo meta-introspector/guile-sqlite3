@@ -67,7 +67,8 @@
             SQLITE_OPEN_PRIVATECACHE
 
             SQLITE_CONSTRAINT
-            SQLITE_CONSTRAINT_PRIMARYKEY))
+            SQLITE_CONSTRAINT_PRIMARYKEY
+            SQLITE_CONSTRAINT_UNIQUE))
 
 ;;
 ;; Utils
@@ -105,6 +106,8 @@
 (define SQLITE_CONSTRAINT 19)
 (define SQLITE_CONSTRAINT_PRIMARYKEY
   (logior SQLITE_CONSTRAINT (ash 6 8)))
+(define SQLITE_CONSTRAINT_UNIQUE
+  (logior SQLITE_CONSTRAINT (ash 8 8)))
 
 (define libsqlite3 (dynamic-link "libsqlite3"))
 
