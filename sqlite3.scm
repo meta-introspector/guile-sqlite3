@@ -36,6 +36,7 @@
             sqlite-close
 
 	    sqlite-enable-load-extension
+            sqlite-exec
             sqlite-prepare
             sqlite-bind
             sqlite-bind-arguments
@@ -225,6 +226,20 @@
     (lambda (db onoff)
       (ele (db-pointer db) onoff))))
 
+(define sqlite-exec
+  (let ((exec (pointer->procedure
+               int
+               (dynamic-func "sqlite3_exec" (@@ (sqlite3) libsqlite3))
+               '(* * * * *))))
+    (lambda* (db sql)
+      "Evaluate the string SQL, which may contain one or several SQL
+statements, into DB.  The result is unspecified."
+      ;; XXX: 'sqlite3_exec' has a 'callback' parameter but we ignore it
+      ;; here.
+      (assert-live-db! db)
+      (unless (zero? (exec (db-pointer db) (string->pointer sql)
+                           %null-pointer %null-pointer %null-pointer))
+        (check-error db 'sqlite-exec)))))
 
 
 ;;;

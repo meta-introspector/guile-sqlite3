@@ -20,10 +20,6 @@
   #:use-module (ice-9 format)
   #:use-module (sqlite3))
 
-(define (sqlite-exec db sql)
-  (let ((stmt (sqlite-prepare db sql)))
-    (sqlite-map display stmt)))
-
 (define (sqlite-exec* db sql key value)
   (let ((stmt (sqlite-prepare db sql)))
     (sqlite-bind stmt key value)
