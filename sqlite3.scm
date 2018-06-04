@@ -36,7 +36,6 @@
             sqlite-close
 
 	    sqlite-enable-load-extension
-            sqlite-prepare*
             sqlite-prepare
             sqlite-bind
             sqlite-bind-arguments
