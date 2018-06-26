@@ -31,8 +31,6 @@ To run the test suite just do:
 make check
 ```
 
-Eventually you have to point `LD_LIBRARY_PATH` to the directory of the `libsqlite3.so` file.
-
 ## Installing
 
 ### Guix

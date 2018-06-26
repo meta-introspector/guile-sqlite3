@@ -9,3 +9,4 @@
 /configure
 /env
 *.go
+/sqlite3.scm

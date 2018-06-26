@@ -110,7 +110,7 @@
 (define SQLITE_CONSTRAINT_UNIQUE
   (logior SQLITE_CONSTRAINT (ash 8 8)))
 
-(define libsqlite3 (dynamic-link "libsqlite3"))
+(define libsqlite3 (dynamic-link "@SQLITE_LIBDIR@/libsqlite3"))
 
 (define-record-type <sqlite-db>
   (make-db pointer open? stmts)
