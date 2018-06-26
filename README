@@ -1,0 +1,44 @@
+# guile-sqlite3
+
+This is the repository of guile bindings for sqlite3
+@ [notabug.org](https://notabug.org/civodul/guile-sqlite3):
+
+```bash
+git clone https://notabug.org/civodul/guile-sqlite3.git
+```
+
+## Documentation
+
+At the moment there is only the source code.
+
+## Building
+
+To build guile-sqlite3 you need `guile` and `autotools`.
+
+Then just do:
+
+```bash
+autoreconf -vfi
+./configure
+make
+```
+
+## Testing
+
+To run the test suite just do:
+
+```bash
+make check
+```
+
+Eventually you have to point `LD_LIBRARY_PATH` to the directory of the `libsqlite3.so` file.
+
+## Installing
+
+### Guix
+
+`guix package -i guile-sqlite3`
+
+### openSUSE
+
+`sudo zypper install guile-sqlite3`
