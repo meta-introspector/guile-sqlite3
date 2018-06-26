@@ -1,6 +1,9 @@
 dnl -*- Autoconf -*-
 
-AC_INIT(sqlite3, 0.1.0)
+AC_INIT([Guile-SQLite3], [0.1.0],
+  [guile-user@gnu.org], [guile-sqlite3],
+  [https://notabug.org/civodul/guile-sqlite3])
+
 AC_CONFIG_SRCDIR([sqlite3.scm.in])
 AC_CONFIG_AUX_DIR([build-aux])
 AM_INIT_AUTOMAKE([color-tests -Wall -Wno-portability])
