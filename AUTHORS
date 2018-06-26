@@ -1,1 +1,3 @@
-Andy Wingo <wingo@pobox.com>
+Guile-SQLite3 was initially written by Andy Wingo <wingo@pobox.com>.
+See <https://notabug.org/civodul/guile-sqlite3> for the complete list
+of authors.
