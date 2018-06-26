@@ -10,3 +10,7 @@
 /env
 *.go
 /sqlite3.scm
+/config.cache
+/test-suite.log
+/tests/*.log
+/tests/*.trs
