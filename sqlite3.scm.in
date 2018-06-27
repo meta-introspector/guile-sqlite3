@@ -33,6 +33,7 @@
   #:use-module (srfi srfi-9)
   #:use-module (srfi srfi-19)
   #:export (sqlite-open
+            sqlite-db?
             sqlite-close
 
 	    sqlite-enable-load-extension
@@ -118,6 +119,9 @@
   (pointer db-pointer)
   (open? db-open? set-db-open?!)
   (stmts db-stmts))
+
+(define-syntax sqlite-db?
+  (identifier-syntax db?))
 
 (define-record-type <sqlite-stmt>
   (make-stmt pointer live? reset? cached?)
