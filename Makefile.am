@@ -7,7 +7,12 @@ SOURCES =					\
 	sqlite3.scm
 
 TESTS = 					\
-	tests/basic.test
-TEST_LOG_COMPILER = $(abs_top_builddir)/env $(GUILE) --no-auto-compile
+	tests/basic.scm
 
-EXTRA_DIST += $(TESTS)
+TEST_EXTENSIONS = .scm
+
+SCM_LOG_DRIVER =						\
+  $(top_builddir)/env $(GUILE) --no-auto-compile -e main	\
+      $(top_srcdir)/build-aux/test-driver.scm
+
+EXTRA_DIST += $(TESTS) build-aux/test-driver.scm
