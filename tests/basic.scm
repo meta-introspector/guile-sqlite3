@@ -92,9 +92,7 @@
 (test-assert "drop"
   (sqlite-exec db "DROP TABLE IF EXISTS foos"))
 
-(test-assert "close"
-  (sqlite-close db))
-
+(sqlite-close db)
 (delete-file db-name)
 
 (test-end "basic")
