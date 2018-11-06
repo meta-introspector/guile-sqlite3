@@ -26,7 +26,8 @@
   (let ((stmt (sqlite-prepare db sql)))
     (sqlite-bind stmt key value)
     (sqlite-map display stmt)
-    (sqlite-finalize stmt)))
+    (sqlite-finalize stmt)
+    #t))
 
 ;; Cleanup database so we can check creation
 (define db-name "tests/simple.db")
@@ -88,7 +89,8 @@
     (let ((stmt (sqlite-prepare db "INSERT INTO foos(name) VALUES(?)")))
       (sqlite-bind stmt 1 "myfoo")
       (sqlite-step stmt)
-      (sqlite-finalize stmt))))
+      (sqlite-finalize stmt)
+      #t)))
 
 (test-assert "drop"
   (sqlite-exec db "DROP TABLE IF EXISTS foos"))
