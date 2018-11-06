@@ -25,7 +25,8 @@
 (define (sqlite-exec* db sql key value)
   (let ((stmt (sqlite-prepare db sql)))
     (sqlite-bind stmt key value)
-    (sqlite-map display stmt)))
+    (sqlite-map display stmt)
+    (sqlite-finalize stmt)))
 
 ;; Cleanup database so we can check creation
 (define db-name "tests/simple.db")
