@@ -21,15 +21,20 @@ PKG_CHECK_MODULES([SQLITE], [sqlite3])
 SQLITE_LIBDIR="`"$PKG_CONFIG" sqlite3 --variable libdir`"
 AC_SUBST([SQLITE_LIBDIR])
 
-AC_MSG_CHECKING([whether '$SQLITE_LIBDIR/libsqlite3' is usable])
-GUILE_CHECK([retval],
-  [(dynamic-func \"sqlite3_open_v2\"
+if test "$cross_compiling" = "no"; then
+   AC_MSG_CHECKING([whether '$SQLITE_LIBDIR/libsqlite3' is usable])
+   GUILE_CHECK([retval],
+   [(dynamic-func \"sqlite3_open_v2\"
                  (dynamic-link \"$SQLITE_LIBDIR/libsqlite3\"))])
-if test "$retval" != 0; then
-  AC_MSG_RESULT([no])
-  AC_MSG_ERROR([failed to load '$SQLITE_LIBDIR/libsqlite3'])
+   if test "$retval" != 0; then
+      AC_MSG_RESULT([no])
+      AC_MSG_ERROR([failed to load '$SQLITE_LIBDIR/libsqlite3'])
+   else
+      AC_MSG_RESULT([yes])
+   fi
 else
-  AC_MSG_RESULT([yes])
+   GUILE_TARGET="--target=$host_alias"
+   AC_SUBST([GUILE_TARGET])
 fi
 
 AC_CONFIG_FILES([Makefile sqlite3.scm])
