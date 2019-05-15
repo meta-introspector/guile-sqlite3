@@ -20,6 +20,7 @@
 (define-module (tests basic-test)
   #:use-module (srfi srfi-64)
   #:use-module (ice-9 format)
+  #:use-module (rnrs bytevectors)
   #:use-module (sqlite3))
 
 (define (sqlite-exec* db sql key value)
@@ -94,6 +95,30 @@
 
 (test-assert "drop"
   (sqlite-exec db "DROP TABLE IF EXISTS foos"))
+
+(define bv
+  (let* ((n 1023)
+	 (v (make-bytevector n)))
+    (do ((i 0 (1+ i)))
+	((>= i n))
+      (bytevector-u8-set! v i (random 256)))
+    v))
+
+(test-assert "insert blob"
+  (begin
+    (sqlite-exec db "CREATE TABLE cow (biggie blob)")
+    (let ((stmt (sqlite-prepare db "INSERT INTO cow (biggie) VALUES(?)")))
+      (sqlite-bind stmt 1 bv)
+      (sqlite-step stmt)
+      (sqlite-finalize stmt)
+      #t)))
+
+(test-assert "select blob"
+  (let* ((stmt (sqlite-prepare db "SELECT biggie from cow"))
+	 (res (vector-ref (car (sqlite-map identity stmt)) 0)))
+;    (display res)(newline)
+;    (display bv)(newline)
+    (bytevector=? res bv)))
 
 (sqlite-close db)
 (delete-file db-name)

@@ -493,24 +493,26 @@ Also bind named parameters to the respective ones."
           (list '* int))))
     (lambda (stmt i)
       (assert-live-stmt! stmt)
-      (case (value-type (stmt-pointer stmt) i)
-        ((1) ; SQLITE_INTEGER
-         (value-int (stmt-pointer stmt) i))
-        ((2) ; SQLITE_FLOAT
-         (value-double (stmt-pointer stmt) i))
-        ((3) ; SQLITE3_TEXT
-         (let ((p (value-blob (stmt-pointer stmt) i)))
-           (if (null-pointer? p)
-               ""
-               (utf8->string
-                (pointer->bytevector p (value-bytes (stmt-pointer stmt) i))))))
-        ((4) ; SQLITE_BLOB
-         (let ((p (value-blob (stmt-pointer stmt) i)))
-           (if (null-pointer? p)
-               (make-bytevector 0)
-               (pointer->bytevector p (value-bytes (stmt-pointer stmt) i)))))
-        ((5) ; SQLITE_NULL
-         #f)))))
+      (let ((nbytes (value-bytes (stmt-pointer stmt) i)))
+	(case (value-type (stmt-pointer stmt) i)
+	  ((1) ; SQLITE_INTEGER
+	   (value-int (stmt-pointer stmt) i))
+	  ((2) ; SQLITE_FLOAT
+	   (value-double (stmt-pointer stmt) i))
+	  ((3) ; SQLITE3_TEXT
+	   (let ((p (value-blob (stmt-pointer stmt) i)))
+	     (if (null-pointer? p)
+		 ""
+		 (utf8->string
+		  (pointer->bytevector p nbytes)))))
+	  ((4) ; SQLITE_BLOB
+	   (let ((p (value-blob (stmt-pointer stmt) i)))
+	     (if (null-pointer? p)
+		 (make-bytevector 0)
+		 (bytevector-copy
+		  (pointer->bytevector p nbytes)))))
+	  ((5) ; SQLITE_NULL
+	   #f))))))
 
 (define (sqlite-column-names stmt)
   (let ((v (make-vector (sqlite-column-count stmt))))
