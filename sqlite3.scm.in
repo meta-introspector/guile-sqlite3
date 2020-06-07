@@ -274,15 +274,40 @@ statements, into DB.  The result is unspecified."
             (dynamic-func "sqlite3_finalize" libsqlite3)
             (list '*))))
     (lambda (stmt)
-      ;; Note: When STMT is cached, this is a no-op.  This ensures caching
-      ;; actually works while still separating concerns: users can turn
-      ;; caching on and off without having to change the rest of their code.
-      (when (and (stmt-live? stmt)
-                 (not (stmt-cached? stmt)))
-        (let ((p (stmt-pointer stmt)))
-          (sqlite-remove-statement! (stmt->db stmt) stmt)
-          (set-stmt-live?! stmt #f)
-          (f p))))))
+      ;; Note: When STMT is cached, this merely resets.  This ensures caching
+      ;; actually works while still separating concerns: users can turn caching
+      ;; on and off without having to change the rest of their code.
+      (if (and (stmt-live? stmt)
+               (not (stmt-cached? stmt)))
+          (let ((p (stmt-pointer stmt)))
+            (sqlite-remove-statement! (stmt->db stmt) stmt)
+            (set-stmt-live?! stmt #f)
+            (f p))
+          ;; It's necessary to reset cached statements due to the following:
+          ;;
+          ;; "An implicit transaction (a transaction that is started
+          ;; automatically, not a transaction started by BEGIN) is committed
+          ;; automatically when the last active statement finishes.  A statement
+          ;; finishes when its last cursor closes, which is guaranteed to happen
+          ;; when the prepared statement is reset or finalized.  Some statements
+          ;; might "finish" for the purpose of transaction control prior to
+          ;; being reset or finalized, but there is no guarantee of this."
+          ;;
+          ;; (see https://www.sqlite.org/lang_transaction.html)
+          ;;
+          ;; Thus, it's possible for an implicitly-started transaction to hang
+          ;; around until sqlite-reset is called when the cached statement is
+          ;; next used.  Because the transaction is committed automatically only
+          ;; when the *last active statement* finishes, the implicitly-started
+          ;; transaction may later be upgraded to a write transaction (!) and
+          ;; this non-reset statement will still be keeping the transaction from
+          ;; committing until it is next used or the database connection is
+          ;; closed.  This has the potential to make (exclusive) write access to
+          ;; the database necessary for much longer than it should be.
+          ;;
+          ;; So it's necessary to preserve the statement-finishing behavior of
+          ;; sqlite_finalize here, which we do by calling sqlite-reset.
+          (sqlite-reset stmt)))))
 
 (define *stmt-map* (make-weak-key-hash-table))
 (define (stmt->db stmt)
