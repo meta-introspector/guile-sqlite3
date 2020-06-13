@@ -76,6 +76,7 @@
   (let* ((stmt   (sqlite-prepare db "select * from project"))
          (result (sqlite-map identity stmt)))
     (sqlite-finalize stmt)
+    (sqlite-finalize stmt) ; no-op
     result))
 
 (test-assert "select with named parameters"
