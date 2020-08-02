@@ -20,6 +20,7 @@
 (define-module (tests basic-test)
   #:use-module (srfi srfi-64)
   #:use-module (ice-9 format)
+  #:use-module (system foreign)
   #:use-module (rnrs bytevectors)
   #:use-module (sqlite3))
 
@@ -120,6 +121,16 @@
 ;    (display res)(newline)
 ;    (display bv)(newline)
     (bytevector=? res bv)))
+
+(begin
+  (sqlite-trace db
+                SQLITE_TRACE_STMT
+                (lambda (trace p x)
+                  (test-assert "trace"
+                    (string=? (pointer->string
+                               (sqlite-expanded-sql p))
+                              "select * from project where 'bla' = 'bla'"))))
+  (sqlite-exec* db "select * from project where 'bla' = :foo" 'foo "bla"))
 
 (sqlite-close db)
 (delete-file db-name)
