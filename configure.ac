@@ -6,6 +6,7 @@ AC_INIT([Guile-SQLite3], [0.1.0],
 
 AC_CONFIG_SRCDIR([sqlite3.scm.in])
 AC_CONFIG_AUX_DIR([build-aux])
+AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([color-tests -Wall -Wno-portability])
 AM_SILENT_RULES([yes])
 
